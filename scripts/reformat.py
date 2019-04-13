@@ -44,8 +44,9 @@ def parseDemographicsFile(ifn):
 	# subject,sex,age,height,mass,dom_limb,inv_limb,graft,speed_shod,speed_bare,control,underload,overload,symm
 
 	with open(ifn, 'r') as ifd:
-		 for line in ifd:
-		 	fields = line.rstrip('\n').split(',')
+		ifd.readline() # skip headerline
+		for line in ifd:
+			fields = line.rstrip('\n').split(',')
 			sample = fields[0]
 			height = float(fields[3])
 			mass = float(fields[4])
@@ -145,25 +146,56 @@ if __name__ == "__main__":
 				fields = line.rstrip('\n').split('\t')
 
 				# vgrf
+				if vgrf_col_indices[-1] >= len(fields):
+					print("ERROR: missing data in at least one vgrf column", file=sys.stderr)
+					sys.exit(1)
 				for i,j in enumerate(vgrf_col_indices):
+					if not fields[j]:
+						print("ERROR: missing data in at least one vgrf column", file=sys.stderr)
+						sys.exit(1)
 					vgrf[i].append(float(fields[j]) / mass)
 
 				# angs
 				#	sagang
+				if sagang_col_indices[-1] >= len(fields):
+					print("ERROR: missing data in at least one sagang column", file=sys.stderr)
+					sys.exit(1)
 				for i,j in enumerate(sagang_col_indices):
+					if not fields[j]:
+						print("ERROR: missing data in at least one sagang column", file=sys.stderr)
+						sys.exit(1)
 					sagang[i].append(float(fields[j]))
 
+
 				#	frontang
+				if frontang_col_indices[-1] >= len(fields):
+					print("ERROR: missing data in at least one frontang column", file=sys.stderr)
+					sys.exit(1)
 				for i,j in enumerate(frontang_col_indices):
+					if not fields[j]:
+						print("ERROR: missing data in at least one frontang column", file=sys.stderr)
+						sys.exit(1)
 					frontang[i].append(float(fields[j]))
 
 				# moms
 				# 	sagmom
+				if sagmom_col_indices[-1] >= len(fields):
+					print("ERROR: missing data in at least one sagmom column", file=sys.stderr)
+					sys.exit(1)
 				for i,j in enumerate(sagmom_col_indices):
+					if not fields[j]:
+						print("ERROR: missing data in at least one sagmom column", file=sys.stderr)
+						sys.exit(1)
 					sagmom[i].append(float(fields[j]) / denom)
 
 				#	frontmom
+				if frontmom_col_indices[-1] >= len(fields):
+					print("ERROR: missing data in at least one frontmom column", file=sys.stderr)
+					sys.exit(1)
 				for i,j in enumerate(frontmom_col_indices):
+					if not fields[j]:
+						print("ERROR: missing data in at least one frontmom column", file=sys.stderr)
+						sys.exit(1)
 					frontmom[i].append(float(fields[j]) / denom)
 
 		# load data from this file into the larger data structures
