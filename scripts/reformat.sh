@@ -49,7 +49,7 @@ do
 		printf "%s: %s\n" "${COND}" "FAILED" 1>&2
 		EXIT_CODE=${LOCAL_EXIT_CODE}
 	fi
-	
+
 done < "${INPUT_CONDITIONS_LIST}"
 
 exit ${EXIT_CODE}

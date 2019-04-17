@@ -70,6 +70,46 @@ def parseSamplesFile(sample_fn):
 
 	return sorted(l, key=lambda x: int(x[1:]))
 
+def extractIndices(measurement,inv_limb,data_types,xyzs):
+
+	indices = []
+	direction = ""
+	field = ""
+
+	if measurement == "vgrf":
+		direction = "Z"
+
+		field = "FP1" # inv_limb == 0 (right)
+		if inv_limb == 1: # left
+			field = "FP2"
+
+	elif measurement == "sagang" or measurement == "frontang":
+		direction = "Y" # measurement == "sagang"
+		if measurement == "frontang":
+			direction = "X"
+
+		field = "RIGHTKNEEANGLE" # inv_limb == 0 (right)
+		if inv_limb == 1: # left
+			field = "LEFTKNEEANGLE"
+
+	elif measurement == "sagmom" or measurement == "frontmom":
+		direction = "Y" # measurement == "sagmom"
+		if measurement == "frontmom":
+			direction = "X"
+
+		field = "RIGHTKNEEMOMENT" # inv_limb == 0 (right)
+		if inv_limb == 1: # left
+			field = "LEFTKNEEMOMENT"
+
+	return [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == direction]
+
+
+def stringify(x):
+	if not x is None:
+		return str(x)
+	else:
+		return "NA"
+
 if __name__ == "__main__":
 	
 	# handle the arguments to the script
@@ -88,11 +128,8 @@ if __name__ == "__main__":
 		output[measurement] = []
 
 	for sample in samples:
-		vgrf = [ [] for x in range(0,num_trials,1) ]
-		sagang = [ [] for x in range(0,num_trials,1) ]
-		frontang = [ [] for x in range(0,num_trials,1) ]
-		sagmom = [ [] for x in range(0,num_trials,1) ]
-		frontmom = [ [] for x in range(0,num_trials,1) ]
+		for measurement in measurements:
+			output[measurement].extend( [ [] for x in range(0,num_trials,1) ] )
 
 		ifn = f"{infdir}/{condition}/{sample}/{sample}_{condition}_normalized.txt"
 
@@ -103,107 +140,45 @@ if __name__ == "__main__":
 			ifd.readline() # skip fourth line
 			xyzs = ifd.readline().rstrip('\n').upper().split('\t')
 
-			# vGRF
-			field = "FP1" # demdict[sample]["inv_limb"] == 0 (right)
-			if demdict[sample]["inv_limb"] == 1: # left
-				field = "FP2"
+			indices = {}
 
-			vgrf_col_indices = [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == "Z"]
+			for measurement in measurements:
+				indices[measurement] = extractIndices(measurement,demdict[sample]["inv_limb"],data_types,xyzs)
 
-			# sagang & frontang
-			field = "RIGHTKNEEANGLE" # demdict[sample]["inv_limb"] == 0 (right)
-			if demdict[sample]["inv_limb"] == 1: # left
-				field = "LEFTKNEEANGLE"
-
-			sagang_col_indices = [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == "Y"]
-			frontang_col_indices = [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == "X"]
-				
-			# sagmom & frontmom
-			field = "RIGHTKNEEMOMENT" # demdict[sample]["inv_limb"] == 0 (right)
-			if demdict[sample]["inv_limb"] == 1: # left
-				field = "LEFTKNEEMOMENT"
-
-			sagmom_col_indices = [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == "Y"]
-			frontmom_col_indices = [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == "X"]
-
-			# test if enough trials
-			if len(vgrf_col_indices) < num_trials or len(sagang_col_indices) < num_trials or len(frontang_col_indices) < num_trials or len(sagmom_col_indices) < num_trials or len(frontmom_col_indices) < num_trials:
-				print(f"ERROR: Insufficient data for {num_trials} trials. At least one variable has less.", file=sys.stderr)
-				sys.exit(1)
-
-			# cut out uneeded trials
-			vgrf_col_indices = vgrf_col_indices[:num_trials]
-			sagang_col_indices = sagang_col_indices[:num_trials]
-			frontang_col_indices = frontang_col_indices[:num_trials]
-			sagmom_col_indices = sagmom_col_indices[:num_trials]
-			frontmom_col_indices = frontmom_col_indices[:num_trials]
+				# test if enough trials
+				if len(indices[measurement]) >= num_trials:
+					indices[measurement] = indices[measurement][:num_trials]
+				else:
+					print(f"WARNING: Insufficient trials for {condition} {sample} {measurement}. {len(indices[measurement])} present, {num_trials} expected. Missing trials added and filled with NAs.", file=sys.stderr)
 
 			# parse the actual data
 			mass = float(demdict[sample]["mass"])
-			denom = mass * demdict[sample]["height"]
+			massxheight = mass * demdict[sample]["height"]
 
+			row_num = 6 # the main data starts at row #6 because of 5 header lines
 			for line in ifd:
 				fields = line.rstrip('\n').split('\t')
 
-				# vgrf
-				if vgrf_col_indices[-1] >= len(fields):
-					print("ERROR: missing data in at least one vgrf column", file=sys.stderr)
-					sys.exit(1)
-				for i,j in enumerate(vgrf_col_indices):
-					if not fields[j]:
-						print("ERROR: missing data in at least one vgrf column", file=sys.stderr)
-						sys.exit(1)
-					vgrf[i].append(float(fields[j]) / mass)
+				for measurement in measurements:
+					denom = 1 # angs
+					if measurement == "vgrf":
+						denom = mass
+					elif measurement == "sagmom" or measurement == "frontmom":
+						denom = massxheight
 
-				# angs
-				#	sagang
-				if sagang_col_indices[-1] >= len(fields):
-					print("ERROR: missing data in at least one sagang column", file=sys.stderr)
-					sys.exit(1)
-				for i,j in enumerate(sagang_col_indices):
-					if not fields[j]:
-						print("ERROR: missing data in at least one sagang column", file=sys.stderr)
-						sys.exit(1)
-					sagang[i].append(float(fields[j]))
+					for i,j in enumerate(indices[measurement]):
+						k = len(output[measurement]) - num_trials + i
+						if fields[j]:
+							output[measurement][k].append(float(fields[j]) / denom)
+						else:
+							print(f"WARNING: missing data in {condition} {sample} {measurement} column #{i+1} (csv row,column: {row_num},{j+1}). This cell is filled with an \"NA\" in the output.", file=sys.stderr)
+							output[measurement][k].append(None)
 
+					for i in range(len(indices[measurement]), num_trials, 1):
+						k = len(output[measurement]) - num_trials + i
+						output[measurement][k].append(None)
 
-				#	frontang
-				if frontang_col_indices[-1] >= len(fields):
-					print("ERROR: missing data in at least one frontang column", file=sys.stderr)
-					sys.exit(1)
-				for i,j in enumerate(frontang_col_indices):
-					if not fields[j]:
-						print("ERROR: missing data in at least one frontang column", file=sys.stderr)
-						sys.exit(1)
-					frontang[i].append(float(fields[j]))
-
-				# moms
-				# 	sagmom
-				if sagmom_col_indices[-1] >= len(fields):
-					print("ERROR: missing data in at least one sagmom column", file=sys.stderr)
-					sys.exit(1)
-				for i,j in enumerate(sagmom_col_indices):
-					if not fields[j]:
-						print("ERROR: missing data in at least one sagmom column", file=sys.stderr)
-						sys.exit(1)
-					sagmom[i].append(float(fields[j]) / denom)
-
-				#	frontmom
-				if frontmom_col_indices[-1] >= len(fields):
-					print("ERROR: missing data in at least one frontmom column", file=sys.stderr)
-					sys.exit(1)
-				for i,j in enumerate(frontmom_col_indices):
-					if not fields[j]:
-						print("ERROR: missing data in at least one frontmom column", file=sys.stderr)
-						sys.exit(1)
-					frontmom[i].append(float(fields[j]) / denom)
-
-		# load data from this file into the larger data structures
-		output["vgrf"].extend(vgrf)
-		output["sagang"].extend(sagang)
-		output["frontang"].extend(frontang)
-		output["sagmom"].extend(sagmom)
-		output["frontmom"].extend(frontmom)
+			row_num += 1
 
 	# flip orientation (make it a list of rows instead of a list of columns)
 	for measurement in measurements:
@@ -234,7 +209,7 @@ if __name__ == "__main__":
 
 			# data
 			for row in output[measurement]:
-				ofd.write(','.join(list(map(str, row))) + '\n')
+				ofd.write(','.join(list(map(stringify, row))) + '\n')
 	
 	# exit
 	sys.exit(0)
