@@ -1,9 +1,16 @@
 #! /bin/bash
 
+# make sure it works on macOS
+READLINK="readlink"
+if [ "`uname`" == "Darwin" ]
+then
+	READLINK="g${READLINK}"
+fi
+
 # ensure we're running from the correct location
-SCRIPTS_DIR=$(greadlink -f `dirname "${BASH_SOURCE[0]}"`)
-MAIN_DIR=$(greadlink -f `dirname "${SCRIPTS_DIR}/"`)
-RUN_DIR=$(greadlink -f .)
+SCRIPTS_DIR=$(${READLINK} -f `dirname "${BASH_SOURCE[0]}"`)
+MAIN_DIR=$(${READLINK} -f `dirname "${SCRIPTS_DIR}/"`)
+RUN_DIR=$(${READLINK} -f .)
 
 if [ "${RUN_DIR}" != "${MAIN_DIR}" ] || [ "${MAIN_DIR}/scripts" != "${SCRIPTS_DIR}" ]
 then
