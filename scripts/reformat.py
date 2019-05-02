@@ -70,9 +70,8 @@ def parseSamplesFile(sample_fn):
 
 	return sorted(l, key=lambda x: int(x[1:]))
 
-def extractIndices(measurement,inv_limb,data_types,xyzs):
+def extractIndicesAndInversionDecision(measurement,inv_limb,data_types,xyzs):
 
-	indices = []
 	direction = ""
 	field = ""
 
@@ -100,8 +99,13 @@ def extractIndices(measurement,inv_limb,data_types,xyzs):
 		field = "RIGHTKNEEMOMENT" # inv_limb == 0 (right)
 		if inv_limb == 1: # left
 			field = "LEFTKNEEMOMENT"
+	
+	# decide inversion
+	invert = False
+	if ( measurement == "frontang" and field == "RIGHTKNEEANGLE" ) or ( measurement == "frontmom" and field == "RIGHTKNEEMOMENT" ):
+		invert = True
 
-	return [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == direction]
+	return [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == direction], invert
 
 
 def stringify(x):
@@ -141,9 +145,10 @@ if __name__ == "__main__":
 			xyzs = ifd.readline().rstrip('\n').upper().split('\t')
 
 			indices = {}
+			inversions = {}
 
 			for measurement in measurements:
-				indices[measurement] = extractIndices(measurement,demdict[sample]["inv_limb"],data_types,xyzs)
+				indices[measurement], inversions[measurement] = extractIndicesAndInversionDecision(measurement,demdict[sample]["inv_limb"],data_types,xyzs)
 
 				# test if enough trials
 				if len(indices[measurement]) >= num_trials:
@@ -160,6 +165,10 @@ if __name__ == "__main__":
 				fields = line.rstrip('\n').split('\t')
 
 				for measurement in measurements:
+					invert = 1
+					if indices[measurement]:
+						invert = -1
+
 					denom = 1 # angs
 					if measurement == "vgrf":
 						denom = mass
@@ -169,7 +178,7 @@ if __name__ == "__main__":
 					for i,j in enumerate(indices[measurement]):
 						k = len(output[measurement]) - num_trials + i
 						if fields[j]:
-							output[measurement][k].append(float(fields[j]) / denom)
+							output[measurement][k].append(float(fields[j]) / denom * invert)
 						else:
 							print(f"WARNING: missing data in {condition} {sample} {measurement} column #{i+1} (csv row,column: {row_num},{j+1}). This cell is filled with an \"NA\" in the output.", file=sys.stderr)
 							output[measurement][k].append(None)
