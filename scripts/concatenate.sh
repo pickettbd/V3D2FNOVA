@@ -34,7 +34,6 @@ mkdir -p "${OUTPUT_DIR}" &> /dev/null
 # run the command
 EXIT_CODE=0
 
-
 while read MEAS
 do
 	NON_CONTROL_COND_COUNT=0
@@ -43,10 +42,9 @@ do
 
 	while read COND
 	do
-		if [ "${COND}" == "${CONTROL_COND}" ]
+		if [ "${COND}" != "${CONTROL_COND}" ]
 		then
 			NON_CONTROL_COND_COUNT=$((NON_CONTROL_COND_COUNT+1))
-		else
 			CMD_ARGS+=(${INPUT_DIR}/${COND}_${MEAS}.csv)
 		fi
 
