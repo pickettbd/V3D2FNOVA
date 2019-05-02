@@ -1,5 +1,6 @@
 *
 
 !.gitignore
+!concatenate.sh
 !reformat.py
 !reformat.sh
