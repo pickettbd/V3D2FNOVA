@@ -166,7 +166,7 @@ if __name__ == "__main__":
 
 				for measurement in measurements:
 					invert = 1
-					if indices[measurement]:
+					if inversions[measurement]:
 						invert = -1
 
 					denom = 1 # angs
