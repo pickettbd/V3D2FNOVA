@@ -1,10 +1,20 @@
 #! /bin/bash
 
+# make sure it works on macOS
+READLINK="readlink"
+if [ "`uname`" == "Darwin" ]
+then
+	READLINK="g${READLINK}"
+fi
+
+SCRIPTS_DIR=$(${READLINK} -f `dirname "${BASH_SOURCE[0]}"`)
+
 # run the command
 python3 "${SCRIPTS_DIR}/reformat.py" \
-	--samples-file "data/sample.list" \
+	--samples-file "data/samples.list" \
 	--demo-file "data/demographics.csv" \
-	--condition "data/conditions.list" \
+	--conditions-file "data/conditions.list" \
+	--control-condition "control" \
 	--input-dir "data/input" \
 	--output-prefix "data/output/" \
 	--output-suffix ".csv" \

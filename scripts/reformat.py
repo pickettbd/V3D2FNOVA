@@ -23,7 +23,8 @@ def handleArgs():
 
 	options_group = parser.add_argument_group("Options")
 	#options_group.add_argument("-c", "--condition", dest="condition", metavar="cond1|cond2|...|condN", type=str, action="store", help="The experimental condition of the provided data, e.g., control, overload, etc. [default: control]", default="control", required=False)
-	options_group.add_argument("-c", "--conditions-file", dest="conditions_fn", metavar="data/conditions.list", type=str, action="store", help="The file name for the experimental conditions of the provided data, e.g., control, overload, etc. One condition is listed per line. [default: data/conditions.list]", default="data/conditions.list", required=False)
+	options_group.add_argument("-c", "-cf", "--conditions-file", dest="conditions_fn", metavar="data/conditions.list", type=str, action="store", help="The file name for the experimental conditions of the provided data, e.g., control, overload, etc. One condition is listed per line. [default: data/conditions.list]", default="data/conditions.list", required=False)
+	options_group.add_argument("-C", "-cc", "-Cc", "-CC", "--control-condition", dest="control_condition", metavar="control", type=str, action="store", help="The condition that is to be treated as the control. [default: control]", default="control", required=False)
 	options_group.add_argument("-l", "--last", dest="last_not_first", action="store_true", help="By default, the first n trials are used. Instead, use the last n trials.")
 	options_group.add_argument("-n", "-nt", "--num-trials", dest="num_trials", metavar="int", type=int, action="store", help="The number of trials (stances) to use. [default: 5]", default=5, required=False)
 	
@@ -51,7 +52,27 @@ def handleArgs():
 	if not Path(args.conditions_fn).is_file():
 		print(f"ERROR: {args.conditions_fn} either does not exist or is not a regular file.", file=sys.stderr)
 		sys.exit(1)
+	
+	# ensure input sample and conditions files have unique entries
+	l = parseListFileAsList(args.samples_fn)
+	if len(l) != len(set(l)):
+		print(f"ERROR: {args.samples_fn} has duplicate entries.", file=sys.stderr)
+		sys.exit(1)
 
+	l = parseListFileAsList(args.conditions_fn)
+	if len(l) != len(set(l)):
+		print(f"ERROR: {args.conditions_fn} has duplicate entries.", file=sys.stderr)
+		sys.exit(1)
+
+	# ensure control condition is in the conditions file
+	control_in_conditions_file = False
+	for condition in l:
+		if condition == args.control_condition:
+			control_in_conditions_file = True
+			break
+	if not control_in_conditions_file:
+		print(f"ERROR: control condition ({control}) was not in {args.condition_fn}.", file=sys.stderr)
+		sys.exit(1)
 
 	# ensure output suffix directory exists
 	parent = ''
@@ -64,7 +85,7 @@ def handleArgs():
 		print(f"ERROR: {parent} either does not exist or is not a directory. The path was extracted from \"{args.output_fn_pfx}\".", file=sys.stderr)
 		sys.exit(1)
 	
-	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.last_not_first
+	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.last_not_first, args.control_condition
 
 def transpose2Dlist(rows):
 	# we assume this is not a sparse matrix
@@ -119,8 +140,16 @@ def parseSamplesFile(sample_fn):
 
 	return sorted(l, key=lambda x: int(x[1:]))
 
-def parseConditionsFile(condition_fn):
-	return sorted(parseListFileAsList(condition_fn))
+def parseConditionsFile(condition_fn, control_condition):
+	# extract the conditions
+	l = sorted(parseListFileAsList(condition_fn))
+
+	# ensure control_condition is last item
+	l.remove(control_condition)
+	l.append(control_condition)
+
+	# return
+	return l
 
 def extractIndicesAndInversionDecision(measurement,inv_limb,data_types,xyzs):
 
@@ -159,6 +188,31 @@ def extractIndicesAndInversionDecision(measurement,inv_limb,data_types,xyzs):
 
 	return [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == direction], invert
 
+def writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, control_cond):
+
+	non_control_conditions = 0
+	for condition in conditions:
+		if condition != control_cond:
+			non_control_conditions += 1
+
+	for measurement in measurements:
+		all_input_filenames = [ f"{outfnpre}{condition}_{measurement}{outfnsuf}" for condition in conditions ]
+		all_input_filehandles = [ open(input_fn, 'r') for input_fn in all_input_filenames ]
+		lines = [ ifh.readline() for ifh in all_input_filehandles ]
+		lines.extend( [lines[-1] * (non_control_conditions - 1)] )
+
+		# write the concatenated output file (all non-control conditions then the control
+		# conditions repeated as many times are there are non-control conditions)
+		outfn = f"{outfnpre}all_{measurement}{outfnsuf}"
+		with open(outfn, 'w') as ofd:
+			while all(lines): # since non-empty strings are truthy, this will continue as long as all files provide lines
+				ofd.write(','.join(lines).replace('\n', '') + '\n')
+				lines = [ ifh.readline() for ifh in all_input_filehandles ]
+				lines.extend( [lines[-1] * (non_control_conditions - 1)] )
+
+		# close the open input files
+		for ifh in all_input_filehandles:
+			ifh.close()
 
 def stringify(x):
 	if not x is None:
@@ -170,7 +224,7 @@ def stringify(x):
 if __name__ == "__main__":
 	
 	# handle the arguments to the script
-	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, last_not_first = handleArgs()
+	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, last_not_first, control_cond = handleArgs()
 
 	# parse the samples file, save as list of samples
 	samples = parseSamplesFile(samplefn)
@@ -179,7 +233,7 @@ if __name__ == "__main__":
 	demdict = parseDemographicsFile(demfn)
 
 	# parse the conditions file, save as list of conditions
-	conditions = parseConditionsFile(condfn)
+	conditions = parseConditionsFile(condfn, control_cond)
 
 	# loop through input files
 	measurements = [ "vgrf", "sagang", "frontang", "sagmom", "frontmom" ]
@@ -280,6 +334,8 @@ if __name__ == "__main__":
 				# data
 				for row in output[measurement]:
 					ofd.write(','.join(list(map(stringify, row))) + '\n')
+	
+	writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, control_cond)
 		
 	# exit
 	sys.exit(0)
