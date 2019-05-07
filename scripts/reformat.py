@@ -1,21 +1,70 @@
+__author__ = "Brandon Pickett"
 
+# ----------- IMPORTS ---------------------------- ||
 import sys
 
+# ----------- CLASSES ---------------------------- ||
+
+# ---------- FUNCTIONS --------------------------- ||
 def handleArgs():
 	
-	if len(sys.argv) != 8:
-		print("ERROR: Incorrect usage.", file=sys.stderr)
+	import argparse
+
+	parser = argparse.ArgumentParser(prog="reformat.py", usage="%(prog)s [-d demo.csv] [-s sample.list] [-i data/input] [-op data/output/] [-os .csv] [-c control] [-n 5] [-lhv]", description="Prepare Visual 3D (V3D) data for FNOVA at UNC-CH", add_help=False)
+
+	input_group = parser.add_argument_group("Input Files")
+	input_group.add_argument("-d", "-df", "--demo-file", dest="demo_fn", metavar="demo.csv", type=str, action="store", help="The name of the CSV file containing demographics information. Column 1 must be the sample/subject id. Columns 4, 5, and 7 must be height (cm), mass (kg), and involved limb (0=Right, 1=Left), respectively. [default: data/demographics.csv]", default="data/demographics.csv", required=False)
+	input_group.add_argument("-i", "-id", "--input-dir", dest="input_dir", metavar="/path/to/input/dir", type=str, action="store", help="The directory where the input data files are located. This directory MUST contain one directory per condition. Each condition directory must contain one directory per sample/subject. Each of those directories, in turn, must have a file named after the pattern ${sample}_${condition}_normalized.txt. [default: data/input]", default="data/input", required=False)
+	input_group.add_argument("-s", "-sf", "--samples-file", dest="samples_fn", metavar="samples.list", type=str, action="store", help="The name of the file containing sample/subject identifiers. One id per line. [default: data/samples.list]", default="data/samples.list", required=False)
+
+	output_group = parser.add_argument_group("Output Files")
+	output_group.add_argument("-op", "--output-prefix", dest="output_fn_pfx", metavar="/out/dir/out_file_", type=str, action="store", help="The prefix of the output file name. This includes the path and filename. The actual output file will have the the condition and measurements sandwiched between this prefix and the suffix, like so: ${prefix}${condition}_{measurement}${suffix}. If the prefix is just a directory, be sure to include the trailing slash. [default: data/output/", default="data/output/", required=False)
+	output_group.add_argument("-os", "--output-suffix", dest="output_fn_sfx", metavar=".csv", type=str, action="store", help="The suffix of the output file name. This includes the leading period, if desired. The actual output file will have the the condition and measurements sandwiched between the prefix and this suffix, like so: ${prefix}${condition}_{measurement}${suffix}. [default: .csv", default=".csv", required=False)
+
+	options_group = parser.add_argument_group("Options")
+	#options_group.add_argument("-c", "--condition", dest="condition", metavar="cond1|cond2|...|condN", type=str, action="store", help="The experimental condition of the provided data, e.g., control, overload, etc. [default: control]", default="control", required=False)
+	options_group.add_argument("-c", "--conditions-file", dest="conditions_fn", metavar="data/conditions.list", type=str, action="store", help="The file name for the experimental conditions of the provided data, e.g., control, overload, etc. One condition is listed per line. [default: data/conditions.list]", default="data/conditions.list", required=False)
+	options_group.add_argument("-l", "--last", dest="last_not_first", action="store_true", help="By default, the first n trials are used. Instead, use the last n trials.")
+	options_group.add_argument("-n", "-nt", "--num-trials", dest="num_trials", metavar="int", type=int, action="store", help="The number of trials (stances) to use. [default: 5]", default=5, required=False)
+	
+	misc_group = parser.add_argument_group("Misc", )
+	misc_group.add_argument("-h", "--help", action="help", help="Show this help message and exit")
+	misc_group.add_argument("-v", "--version", action="version", version="%(prog)s 0.9.0-beta", help="Show version number and exit")
+
+	args = parser.parse_args()
+
+	# validate number of trials
+	if args.num_trials < 1:
+		sys.stderr.write(f"ERROR: It makes sense to analyze one ore more trials. {args.num_trials} is not a sane choice.\n")
 		sys.exit(1)
 	
-	samples_file_name = sys.argv[1]
-	demographics_file_name = sys.argv[2]
-	condition = sys.argv[3]
-	input_file_directory = sys.argv[4]
-	output_file_name_prefix = sys.argv[5]
-	output_file_name_suffix = sys.argv[6]
-	num_trials = int(sys.argv[7])
+	# ensure input sample, demo, and conditions files exist
+	from pathlib import Path,PurePath
+	if not Path(args.demo_fn).is_file():
+		print(f"ERROR: {args.demo_fn} either does not exist or is not a regular file.", file=sys.stderr)
+		sys.exit(1)
 
-	return samples_file_name, demographics_file_name, condition, input_file_directory, output_file_name_prefix, output_file_name_suffix, num_trials
+	if not Path(args.samples_fn).is_file():
+		print(f"ERROR: {args.samples_fn} either does not exist or is not a regular file.", file=sys.stderr)
+		sys.exit(1)
+
+	if not Path(args.conditions_fn).is_file():
+		print(f"ERROR: {args.conditions_fn} either does not exist or is not a regular file.", file=sys.stderr)
+		sys.exit(1)
+
+
+	# ensure output suffix directory exists
+	parent = ''
+	if len(args.output_fn_pfx) > 0 and args.output_fn_pfx[-1] == '/':
+		parent = Path(args.output_fn_pfx).resolve()
+	else:
+		parent = Path(PurePath(Path(args.output_fn_pfx).resolve()).parent)
+
+	if not parent.is_dir():
+		print(f"ERROR: {parent} either does not exist or is not a directory. The path was extracted from \"{args.output_fn_pfx}\".", file=sys.stderr)
+		sys.exit(1)
+	
+	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.last_not_first
 
 def transpose2Dlist(rows):
 	# we assume this is not a sparse matrix
@@ -70,6 +119,9 @@ def parseSamplesFile(sample_fn):
 
 	return sorted(l, key=lambda x: int(x[1:]))
 
+def parseConditionsFile(condition_fn):
+	return sorted(parseListFileAsList(condition_fn))
+
 def extractIndicesAndInversionDecision(measurement,inv_limb,data_types,xyzs):
 
 	direction = ""
@@ -114,10 +166,11 @@ def stringify(x):
 	else:
 		return "NA"
 
+# ------------- MAIN ----------------------------- ||
 if __name__ == "__main__":
 	
 	# handle the arguments to the script
-	samplefn, demfn, condition, infdir, outfnpre, outfnsuf, num_trials = handleArgs()
+	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, last_not_first = handleArgs()
 
 	# parse the samples file, save as list of samples
 	samples = parseSamplesFile(samplefn)
@@ -125,101 +178,109 @@ if __name__ == "__main__":
 	# parse the demographics file, save in nested dictionary structure
 	demdict = parseDemographicsFile(demfn)
 
+	# parse the conditions file, save as list of conditions
+	conditions = parseConditionsFile(condfn)
+
 	# loop through input files
 	measurements = [ "vgrf", "sagang", "frontang", "sagmom", "frontmom" ]
-	output = {}
-	for measurement in measurements:
-		output[measurement] = []
 
-	for sample in samples:
+	for condition in conditions:
+		output = {}
 		for measurement in measurements:
-			output[measurement].extend( [ [] for x in range(0,num_trials,1) ] )
+			output[measurement] = []
 
-		ifn = f"{infdir}/{condition}/{sample}/{sample}_{condition}_normalized.txt"
-
-		with open(ifn, 'r') as ifd:
-			ifd.readline() # skip first line
-			data_types = ifd.readline().rstrip('\n').upper().replace(' ', '').split('\t')
-			ifd.readline() # skip third line
-			ifd.readline() # skip fourth line
-			xyzs = ifd.readline().rstrip('\n').upper().split('\t')
-
-			indices = {}
-			inversions = {}
-
+		for sample in samples:
 			for measurement in measurements:
-				indices[measurement], inversions[measurement] = extractIndicesAndInversionDecision(measurement,demdict[sample]["inv_limb"],data_types,xyzs)
+				output[measurement].extend( [ [] for x in range(0,num_trials,1) ] )
 
-				# test if enough trials
-				if len(indices[measurement]) >= num_trials:
-					indices[measurement] = indices[measurement][:num_trials]
-				else:
-					print(f"WARNING: Insufficient trials for {condition} {sample} {measurement}. {len(indices[measurement])} present, {num_trials} expected. Missing trials added and filled with NAs.", file=sys.stderr)
+			ifn = f"{infdir}/{condition}/{sample}/{sample}_{condition}_normalized.txt"
 
-			# parse the actual data
-			mass = float(demdict[sample]["mass"])
-			massxheight = mass * demdict[sample]["height"]
+			with open(ifn, 'r') as ifd:
+				ifd.readline() # skip first line
+				data_types = ifd.readline().rstrip('\n').upper().replace(' ', '').split('\t')
+				ifd.readline() # skip third line
+				ifd.readline() # skip fourth line
+				xyzs = ifd.readline().rstrip('\n').upper().split('\t')
 
-			row_num = 6 # the main data starts at row #6 because of 5 header lines
-			for line in ifd:
-				fields = line.rstrip('\n').split('\t')
+				indices = {}
+				inversions = {}
 
 				for measurement in measurements:
-					invert = 1
-					if inversions[measurement]:
-						invert = -1
+					indices[measurement], inversions[measurement] = extractIndicesAndInversionDecision(measurement,demdict[sample]["inv_limb"],data_types,xyzs)
 
-					denom = 1 # angs
-					if measurement == "vgrf":
-						denom = mass
-					elif measurement == "sagmom" or measurement == "frontmom":
-						denom = massxheight
-
-					for i,j in enumerate(indices[measurement]):
-						k = len(output[measurement]) - num_trials + i
-						if fields[j]:
-							output[measurement][k].append(float(fields[j]) / denom * invert)
+					# test if enough trials
+					if len(indices[measurement]) >= num_trials:
+						if last_not_first:
+							indices[measurement] = indices[measurement][-num_trials:]
 						else:
-							print(f"WARNING: missing data in {condition} {sample} {measurement} column #{i+1} (csv row,column: {row_num},{j+1}). This cell is filled with an \"NA\" in the output.", file=sys.stderr)
+							indices[measurement] = indices[measurement][:num_trials]
+					else:
+						print(f"WARNING: Insufficient trials for {condition} {sample} {measurement}. {len(indices[measurement])} present, {num_trials} expected. Missing trials added and filled with NAs.", file=sys.stderr)
+
+				# parse the actual data
+				mass = float(demdict[sample]["mass"])
+				massxheight = mass * demdict[sample]["height"]
+
+				row_num = 6 # the main data starts at row #6 because of 5 header lines
+				for line in ifd:
+					fields = line.rstrip('\n').split('\t')
+
+					for measurement in measurements:
+						invert = 1
+						if inversions[measurement]:
+							invert = -1
+
+						denom = 1 # angs
+						if measurement == "vgrf":
+							denom = mass
+						elif measurement == "sagmom" or measurement == "frontmom":
+							denom = massxheight
+
+						for i,j in enumerate(indices[measurement]):
+							k = len(output[measurement]) - num_trials + i
+							if fields[j]:
+								output[measurement][k].append(float(fields[j]) / denom * invert)
+							else:
+								print(f"WARNING: missing data in {condition} {sample} {measurement} column #{i+1} (csv row,column: {row_num},{j+1}). This cell is filled with an \"NA\" in the output.", file=sys.stderr)
+								output[measurement][k].append(None)
+
+						for i in range(len(indices[measurement]), num_trials, 1):
+							k = len(output[measurement]) - num_trials + i
 							output[measurement][k].append(None)
 
-					for i in range(len(indices[measurement]), num_trials, 1):
-						k = len(output[measurement]) - num_trials + i
-						output[measurement][k].append(None)
+				row_num += 1
 
-			row_num += 1
+		# flip orientation (make it a list of rows instead of a list of columns)
+		for measurement in measurements:
+			output[measurement] = transpose2Dlist(output[measurement])
 
-	# flip orientation (make it a list of rows instead of a list of columns)
-	for measurement in measurements:
-		output[measurement] = transpose2Dlist(output[measurement])
+		# write the output files
+		for measurement in measurements:
 
-	# write the output files
-	for measurement in measurements:
+			outfn = f"{outfnpre}{condition}_{measurement}{outfnsuf}"
 
-		outfn = f"{outfnpre}{condition}_{measurement}{outfnsuf}"
+			with open(outfn, 'w') as ofd:
 
-		with open(outfn, 'w') as ofd:
+				# header lines
+				# 	condition
+				ofd.write(','.join([condition] * (num_trials * len(samples))) + '\n')
 
-			# header lines
-			# 	condition
-			ofd.write(','.join([condition] * (num_trials * len(samples))) + '\n')
+				# 	sample
+				outstrs = []
+				for sample in samples:
+					outstrs.append(','.join([sample] * num_trials))
+				ofd.write(','.join(outstrs) + '\n')
 
-			# 	sample
-			outstrs = []
-			for sample in samples:
-				outstrs.append(','.join([sample] * num_trials))
-			ofd.write(','.join(outstrs) + '\n')
+				# 	trial number
+				outstrs = []
+				for i in range(1,len(samples) + 1,1):
+					outstrs.append(','.join(list(map(str, range(1, num_trials + 1, 1)))))
+				ofd.write(','.join(outstrs) + '\n')
 
-			# 	trial number
-			outstrs = []
-			for i in range(1,len(samples) + 1,1):
-				outstrs.append(','.join(list(map(str, range(1, num_trials + 1, 1)))))
-			ofd.write(','.join(outstrs) + '\n')
-
-			# data
-			for row in output[measurement]:
-				ofd.write(','.join(list(map(stringify, row))) + '\n')
-	
+				# data
+				for row in output[measurement]:
+					ofd.write(','.join(list(map(stringify, row))) + '\n')
+		
 	# exit
 	sys.exit(0)
 

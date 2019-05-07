@@ -55,6 +55,11 @@ do
 		CMD_ARGS+=(${INPUT_DIR}/${CONTROL_COND}_${MEAS}.csv)
 	done
 
+	# For every non-control condition, we include a copy of the control condition at the end.
+	# Effectively, the command we're running is as follows:
+	# 
+	#	paste -d ',' overload.csv underload.csv control.csv control.csv > all.csv
+	#
 	paste ${CMD_ARGS[@]} > "${OUTPUT_FILE_PREFIX}${MEAS}${OUTPUT_FILE_SUFFIX}"
 
 	LOCAL_EXIT_CODE=$?
