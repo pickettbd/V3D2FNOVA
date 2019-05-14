@@ -3,3 +3,5 @@
 !.gitignore
 !reformat.py
 !reformat.sh
+!reorient.awk
+!reorientV3D2UNC.sh
