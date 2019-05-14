@@ -1,13 +1,16 @@
 #! /bin/bash
 
 # make sure it works on macOS
+DIRNAME="dirname"
 READLINK="readlink"
 if [ "`uname`" == "Darwin" ]
 then
+	DIRNAME="g${DIRNAME}"
 	READLINK="g${READLINK}"
 fi
 
-SCRIPTS_DIR=$(${READLINK} -f `dirname "${BASH_SOURCE[0]}"`)
+# set scripts directory
+SCRIPTS_DIR=$(${READLINK} -f `${DIRNAME} "${BASH_SOURCE[0]}"`)
 
 # run the command
 python3 "${SCRIPTS_DIR}/reformat.py" \
