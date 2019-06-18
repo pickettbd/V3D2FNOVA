@@ -25,6 +25,7 @@ def handleArgs():
 	#options_group.add_argument("-c", "--condition", dest="condition", metavar="cond1|cond2|...|condN", type=str, action="store", help="The experimental condition of the provided data, e.g., control, overload, etc. [default: control]", default="control", required=False)
 	options_group.add_argument("-c", "-cf", "--conditions-file", dest="conditions_fn", metavar="data/conditions.list", type=str, action="store", help="The file name for the experimental conditions of the provided data, e.g., control, overload, etc. One condition is listed per line. [default: data/conditions.list]", default="data/conditions.list", required=False)
 	options_group.add_argument("-C", "-cc", "-Cc", "-CC", "--control-condition", dest="control_condition", metavar="control", type=str, action="store", help="The condition that is to be treated as the control. [default: control]", default="control", required=False)
+	options_group.add_argument("-g", "-dg", "--downgrade", "--downhill", dest="downgrade", action="store_true", help="When the grade is zero (level ground) or positive (uphill), the LEFT knee values need to be negated. When the grade is negative (downhill), the RIGHT knee values need to be negated. By default, the grade is assumed to be non-negative.")
 	options_group.add_argument("-l", "--last", dest="last_not_first", action="store_true", help="By default, the first n trials are used. Instead, use the last n trials.")
 	options_group.add_argument("-n", "-nt", "--num-trials", dest="num_trials", metavar="int", type=int, action="store", help="The number of trials (stances) to use. [default: 5]", default=5, required=False)
 	
@@ -85,7 +86,7 @@ def handleArgs():
 		print(f"ERROR: {parent} either does not exist or is not a directory. The path was extracted from \"{args.output_fn_pfx}\".", file=sys.stderr)
 		sys.exit(1)
 	
-	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.last_not_first, args.control_condition
+	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.downgrade, args.last_not_first, args.control_condition
 
 def transpose2Dlist(rows):
 	# we assume this is not a sparse matrix
@@ -151,7 +152,7 @@ def parseConditionsFile(condition_fn, control_condition):
 	# return
 	return l
 
-def extractIndicesAndInversionDecision(measurement,inv_limb,data_types,xyzs):
+def extractIndicesAndInversionDecision(measurement,inv_limb,data_types,xyzs,downgrade=False):
 
 	direction = ""
 	field = ""
@@ -183,7 +184,8 @@ def extractIndicesAndInversionDecision(measurement,inv_limb,data_types,xyzs):
 	
 	# decide inversion
 	invert = False
-	if ( measurement == "frontang" and field == "RIGHTKNEEANGLE" ) or ( measurement == "frontmom" and field == "RIGHTKNEEMOMENT" ):
+	field_limb = "RIGHT" if downgrade else "LEFT"
+	if ( measurement == "frontang" and field == (field_limb + "KNEEANGLE") ) or ( measurement == "frontmom" and field == (field_limb + "KNEEMOMENT") ):
 		invert = True
 
 	return [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == direction], invert
@@ -224,7 +226,7 @@ def stringify(x):
 if __name__ == "__main__":
 	
 	# handle the arguments to the script
-	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, last_not_first, control_cond = handleArgs()
+	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, downgrade, last_not_first, control_cond = handleArgs()
 
 	# parse the samples file, save as list of samples
 	samples = parseSamplesFile(samplefn)
@@ -260,7 +262,7 @@ if __name__ == "__main__":
 				inversions = {}
 
 				for measurement in measurements:
-					indices[measurement], inversions[measurement] = extractIndicesAndInversionDecision(measurement,demdict[sample]["inv_limb"],data_types,xyzs)
+					indices[measurement], inversions[measurement] = extractIndicesAndInversionDecision(measurement,demdict[sample]["inv_limb"],data_types,xyzs,downgrade=downgrade)
 
 					# test if enough trials
 					if len(indices[measurement]) >= num_trials:
