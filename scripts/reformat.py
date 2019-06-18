@@ -147,13 +147,14 @@ def parseSamplesFile(sample_fn):
 
 	return sorted(l, key=lambda x: int(x[1:]))
 
-def parseConditionsFile(condition_fn, control_condition):
+def parseConditionsFile(condition_fn, control_condition, force_control_last=True):
 	# extract the conditions
 	l = sorted(parseListFileAsList(condition_fn))
 
-	# ensure control_condition is last item
-	l.remove(control_condition)
-	l.append(control_condition)
+	if force_control_last:
+		# ensure control_condition is last item
+		l.remove(control_condition)
+		l.append(control_condition)
 
 	# return
 	return l
@@ -244,7 +245,7 @@ if __name__ == "__main__":
 	demdict = parseDemographicsFile(demfn)
 
 	# parse the conditions file, save as list of conditions
-	conditions = parseConditionsFile(condfn, control_cond)
+	conditions = parseConditionsFile(condfn, control_cond, force_control_last=write_concatenation)
 
 	# loop through input files
 	measurements = [ "vgrf", "sagang", "frontang", "sagmom", "frontmom" ]
