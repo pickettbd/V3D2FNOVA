@@ -161,8 +161,8 @@ def parseConditionsFile(condition_fn, control_condition, force_control_last=True
 
 def extractIndicesAndInversionDecision(measurement,inv_limb,data_types,xyzs,downgrade=False,treadmill=True):
 
-	vGRF_right_colname = "FP1" if treadmill else "FP3"
-	vGRF_left_colname = "FP2" #if treadmill else "FP2"
+	vGRF_right_colname = "FP1" if treadmill else "FP2"
+	vGRF_left_colname = "FP2" if treadmill else "FP3"
 
 	direction = ""
 	field = ""
