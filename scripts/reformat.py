@@ -28,6 +28,7 @@ def handleArgs():
 	options_group.add_argument("-g", "-dg", "--downgrade", "--downhill", dest="downgrade", action="store_true", help="When the grade is zero (level ground) or positive (uphill), the LEFT knee values need to be negated. When the grade is negative (downhill), the RIGHT knee values need to be negated. By default, the grade is assumed to be non-negative.")
 	options_group.add_argument("-l", "--last", dest="last_not_first", action="store_true", help="By default, the first n trials are used. Instead, use the last n trials.")
 	options_group.add_argument("-n", "-nt", "--num-trials", dest="num_trials", metavar="int", type=int, action="store", help="The number of trials (stances) to use. [default: 5]", default=5, required=False)
+	options_group.add_argument("-N", "-NC", "-nc", "-Nc", "--no-concatenate", dest="concatenate", action="store_false", help="By default, the output files for each condition are combined into an extra output file all horizontally concatenated together, with the control condition occuring twice. Specify this option and the concatenated files will be skipped.")
 	
 	misc_group = parser.add_argument_group("Misc", )
 	misc_group.add_argument("-h", "--help", action="help", help="Show this help message and exit")
@@ -86,7 +87,7 @@ def handleArgs():
 		print(f"ERROR: {parent} either does not exist or is not a directory. The path was extracted from \"{args.output_fn_pfx}\".", file=sys.stderr)
 		sys.exit(1)
 	
-	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.downgrade, args.last_not_first, args.control_condition
+	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.downgrade, args.last_not_first, args.concatenate, args.control_condition
 
 def transpose2Dlist(rows):
 	# we assume this is not a sparse matrix
@@ -226,7 +227,7 @@ def stringify(x):
 if __name__ == "__main__":
 	
 	# handle the arguments to the script
-	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, downgrade, last_not_first, control_cond = handleArgs()
+	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, downgrade, last_not_first, write_concatenation, control_cond = handleArgs()
 
 	# parse the samples file, save as list of samples
 	samples = parseSamplesFile(samplefn)
@@ -337,7 +338,8 @@ if __name__ == "__main__":
 				for row in output[measurement]:
 					ofd.write(','.join(list(map(stringify, row))) + '\n')
 	
-	writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, control_cond)
+	if write_concatenation:
+		writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, control_cond)
 		
 	# exit
 	sys.exit(0)
