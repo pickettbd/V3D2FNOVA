@@ -8,9 +8,12 @@ import sys
 # ---------- FUNCTIONS --------------------------- ||
 def handleArgs():
 	
+	if len(sys.argv) == 1: # if no arguments are provided, display help intead of using all defaults
+		sys.argv.append("-h")
+
 	import argparse
 
-	parser = argparse.ArgumentParser(prog="reformat.py", usage="%(prog)s [-d demo.csv] [-s sample.list] [-i data/input] [-op data/output/] [-os .csv] [-c control] [-n 5] [-lhv]", description="Prepare Visual 3D (V3D) data for FNOVA at UNC-CH", add_help=False)
+	parser = argparse.ArgumentParser(prog="reformat.py", usage="%(prog)s [-d demo.csv] [-s sample.list] [-i data/input] [-op data/output/] [-os .csv] [-c data/conditions.list] [-C control] [-n 5] [-glNhv]", description="Prepare Visual 3D (V3D) data for FNOVA at UNC-CH", add_help=False)
 
 	input_group = parser.add_argument_group("Input Files")
 	input_group.add_argument("-d", "-df", "--demo-file", dest="demo_fn", metavar="demo.csv", type=str, action="store", help="The name of the CSV file containing demographics information. Column 1 must be the sample/subject id. Columns 4, 5, and 7 must be height (cm), mass (kg), and involved limb (0=Right, 1=Left), respectively. [default: data/demographics.csv]", default="data/demographics.csv", required=False)
@@ -28,7 +31,7 @@ def handleArgs():
 	options_group.add_argument("-g", "-dg", "--downgrade", "--downhill", dest="downgrade", action="store_true", help="When the grade is zero (level ground) or positive (uphill), the LEFT knee values need to be negated. When the grade is negative (downhill), the RIGHT knee values need to be negated. By default, the grade is assumed to be non-negative.")
 	options_group.add_argument("-l", "--last", dest="last_not_first", action="store_true", help="By default, the first n trials are used. Instead, use the last n trials.")
 	options_group.add_argument("-n", "-nt", "--num-trials", dest="num_trials", metavar="int", type=int, action="store", help="The number of trials (stances) to use. [default: 5]", default=5, required=False)
-	options_group.add_argument("-N", "-NC", "-nc", "-Nc", "--no-concatenate", dest="concatenate", action="store_false", help="By default, the output files for each condition are combined into an extra output file all horizontally concatenated together, with the control condition occuring twice. Specify this option and the concatenated files will be skipped.")
+	options_group.add_argument("-N", "-NC", "-nc", "-Nc", "--no-concatenate", dest="concatenate", action="store_false", help="By default, the output files for each condition are combined into an extra output file all horizontally concatenated together, with the control condition occuring twice. Specify this option and the concatenated files will be skipped. You need not specify --control-condition when using this option because it (--control-condition) will be ignored.")
 	
 	misc_group = parser.add_argument_group("Misc", )
 	misc_group.add_argument("-h", "--help", action="help", help="Show this help message and exit")
@@ -67,14 +70,15 @@ def handleArgs():
 		sys.exit(1)
 
 	# ensure control condition is in the conditions file
-	control_in_conditions_file = False
-	for condition in l:
-		if condition == args.control_condition:
-			control_in_conditions_file = True
-			break
-	if not control_in_conditions_file:
-		print(f"ERROR: control condition ({control}) was not in {args.condition_fn}.", file=sys.stderr)
-		sys.exit(1)
+	if args.concatenate:
+		control_in_conditions_file = False
+		for condition in l:
+			if condition == args.control_condition:
+				control_in_conditions_file = True
+				break
+		if not control_in_conditions_file:
+			print(f"ERROR: control condition ({control}) was not in {args.condition_fn}.", file=sys.stderr)
+			sys.exit(1)
 
 	# ensure output suffix directory exists
 	parent = ''
