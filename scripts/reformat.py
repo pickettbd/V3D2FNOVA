@@ -13,7 +13,7 @@ def handleArgs():
 
 	import argparse
 
-	parser = argparse.ArgumentParser(prog="reformat.py", usage="%(prog)s [-d demo.csv] [-s sample.list] [-i data/input] [-op data/output/] [-os .csv] [-c data/conditions.list] [-C control] [-n 5] [-glNThv]", description="Prepare Visual 3D (V3D) data for FNOVA at UNC-CH", add_help=False)
+	parser = argparse.ArgumentParser(prog="reformat.py", usage="%(prog)s [-d demo.csv] [-s sample.list] [-i data/input] [-op data/output/] [-os .csv] [-c data/conditions.list] [-C control] [-n 5] [-glLNThv]", description="Prepare Visual 3D (V3D) data for FNOVA at UNC-CH", add_help=False)
 
 	input_group = parser.add_argument_group("Input Files")
 	input_group.add_argument("-d", "-df", "--demo-file", dest="demo_fn", metavar="demo.csv", type=str, action="store", help="The name of the CSV file containing demographics information. Column 1 must be the sample/subject id. Columns 4, 5, and 7 must be height (cm), mass (kg), and involved limb (0=Right, 1=Left), respectively. [default: data/demographics.csv]", default="data/demographics.csv", required=False)
@@ -30,6 +30,7 @@ def handleArgs():
 	options_group.add_argument("-C", "-cc", "-Cc", "-CC", "--control-condition", dest="control_condition", metavar="control", type=str, action="store", help="The condition that is to be treated as the control. [default: control]", default="control", required=False)
 	options_group.add_argument("-g", "-dg", "--downgrade", "--downhill", dest="downgrade", action="store_true", help="When the grade is zero (level ground) or positive (uphill), the LEFT knee values need to be negated. When the grade is negative (downhill), the RIGHT knee values need to be negated. By default, the grade is assumed to be non-negative.")
 	options_group.add_argument("-l", "--last", dest="last_not_first", action="store_true", help="By default, the first n trials are used. Instead, use the last n trials.")
+	options_group.add_argument("-L", "--contralateral", dest="contralateral", action="store_true", help="By default, the involved limb is the limb of interest. When this option is specified, the uninvolved/contralateral limb is used instead. Note: this is very naively implemented. When the involved limb is read in from the demographics file, the value is flipped (0->1, 1->0).")
 	options_group.add_argument("-n", "-nt", "--num-trials", dest="num_trials", metavar="int", type=int, action="store", help="The number of trials (stances) to use. [default: 5]", default=5, required=False)
 	options_group.add_argument("-N", "-NC", "-nc", "-Nc", "--no-concatenate", dest="concatenate", action="store_false", help="By default, the output files for each condition are combined into an extra output file all horizontally concatenated together, with the control condition occuring twice. Specify this option and the concatenated files will be skipped. You need not specify --control-condition when using this option because it (--control-condition) will be ignored.")
 	options_group.add_argument("-T", "--not-treadmill", dest="treadmill", action="store_false", help="vGRF values are pulled from columns FP1 (right foot) and FP2 (left foot) when collected on a treadmill. If overground (i.e., not treadmill) data is collected, the columns are FP3 (right foot) and FP2 (left foot). Specifying this option will cause the program to search for FP3 columns instead of FP1 columns.")
@@ -92,7 +93,7 @@ def handleArgs():
 		print(f"ERROR: {parent} either does not exist or is not a directory. The path was extracted from \"{args.output_fn_pfx}\".", file=sys.stderr)
 		sys.exit(1)
 	
-	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.downgrade, args.last_not_first, args.concatenate, args.control_condition, args.treadmill
+	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.downgrade, args.last_not_first, args.concatenate, args.control_condition, args.treadmill, args.contralateral
 
 def transpose2Dlist(rows):
 	# we assume this is not a sparse matrix
@@ -114,7 +115,7 @@ def transpose2Dlist(rows):
 
 	return x
 
-def parseDemographicsFile(ifn):
+def parseDemographicsFile(ifn, contralateral=False):
 	dem = {}
 	
 	# 1	  2   3   4 	 5    6        7        8     9          10         11      12        13       14
@@ -128,6 +129,8 @@ def parseDemographicsFile(ifn):
 			height = float(fields[3])
 			mass = float(fields[4])
 			inv_limb = int(fields[6])
+			if contralateral:
+				inv_limb = (inv_limb - 1) * -1 # 0 -> -1 -> 1, 1 -> 0 -> 0
 
 			dem[sample] =  {"height": height, "mass": mass, "inv_limb": inv_limb}
 
@@ -236,13 +239,13 @@ def stringify(x):
 if __name__ == "__main__":
 	
 	# handle the arguments to the script
-	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, downgrade, last_not_first, write_concatenation, control_cond, treadmill = handleArgs()
+	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, downgrade, last_not_first, write_concatenation, control_cond, treadmill, contralateral = handleArgs()
 
 	# parse the samples file, save as list of samples
 	samples = parseSamplesFile(samplefn)
 
 	# parse the demographics file, save in nested dictionary structure
-	demdict = parseDemographicsFile(demfn)
+	demdict = parseDemographicsFile(demfn, contralateral=contralateral)
 
 	# parse the conditions file, save as list of conditions
 	conditions = parseConditionsFile(condfn, control_cond, force_control_last=write_concatenation)
