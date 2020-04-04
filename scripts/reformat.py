@@ -32,7 +32,7 @@ def handleArgs():
 	options_group.add_argument("-l", "--last", dest="last_not_first", action="store_true", help="By default, the first n trials are used. Instead, use the last n trials.")
 	options_group.add_argument("-L", "--contralateral", dest="contralateral", action="store_true", help="By default, the involved limb is the limb of interest. When this option is specified, the uninvolved/contralateral limb is used instead. Note: this is very naively implemented. When the involved limb is read in from the demographics file, the value is flipped (0->1, 1->0).")
 	options_group.add_argument("-n", "-nt", "--num-trials", dest="num_trials", metavar="int", type=int, action="store", help="The number of trials (stances) to use. [default: 5]", default=5, required=False)
-	options_group.add_argument("-N", "-NC", "-nc", "-Nc", "--no-concatenate", dest="concatenate", action="store_false", help="By default, the output files for each condition are combined into an extra output file all horizontally concatenated together, with the control condition occuring twice. Specify this option and the concatenated files will be skipped. You need not specify --control-condition when using this option because it (--control-condition) will be ignored.")
+	options_group.add_argument("-N", "-NC", "-nc", "-Nc", "--no-concatenate", dest="concatenate", action="store_false", help="By default, the output files for each condition are combined into an extra output file all horizontally concatenated together, with the control condition occuring as many time as there are non-control conditions. Specify this option and the concatenated files will be skipped. You need not specify --control-condition when using this option because it (--control-condition) will be ignored.")
 	options_group.add_argument("-T", "--not-treadmill", dest="treadmill", action="store_false", help="vGRF values are pulled from columns FP1 (right foot) and FP2 (left foot) when collected on a treadmill. If overground (i.e., not treadmill) data is collected, the columns are FP3 (right foot) and FP2 (left foot). Specifying this option will cause the program to search for FP3 columns instead of FP1 columns.")
 	
 	misc_group = parser.add_argument_group("Misc", )
@@ -214,7 +214,8 @@ def writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, contro
 		all_input_filenames = [ f"{outfnpre}{condition}_{measurement}{outfnsuf}" for condition in conditions ]
 		all_input_filehandles = [ open(input_fn, 'r') for input_fn in all_input_filenames ]
 		lines = [ ifh.readline() for ifh in all_input_filehandles ]
-		lines.extend( [lines[-1] * (non_control_conditions - 1)] )
+		if non_control_conditions > 1:
+			lines.extend( [lines[-1] * (non_control_conditions - 1)] )
 
 		# write the concatenated output file (all non-control conditions then the control
 		# conditions repeated as many times are there are non-control conditions)
@@ -223,7 +224,8 @@ def writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, contro
 			while all(lines): # since non-empty strings are truthy, this will continue as long as all files provide lines
 				ofd.write(','.join(lines).replace('\n', '') + '\n')
 				lines = [ ifh.readline() for ifh in all_input_filehandles ]
-				lines.extend( [lines[-1] * (non_control_conditions - 1)] )
+				if non_control_conditions > 1:
+					lines.extend( [lines[-1] * (non_control_conditions - 1)] )
 
 		# close the open input files
 		for ifh in all_input_filehandles:
