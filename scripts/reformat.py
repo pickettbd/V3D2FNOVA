@@ -17,7 +17,7 @@ def handleArgs():
 
 	input_group = parser.add_argument_group("Input Files")
 	input_group.add_argument("-d", "-df", "--demo-file", dest="demo_fn", metavar="demo.csv", type=str, action="store", help="The name of the CSV file containing demographics information. Column 1 must be the sample/subject id. Columns 4, 5, and 7 must be height (cm), mass (kg), and involved limb (0=Right, 1=Left), respectively. [default: data/demographics.csv]", default="data/demographics.csv", required=False)
-	input_group.add_argument("-i", "-id", "--input-dir", dest="input_dir", metavar="/path/to/input/dir", type=str, action="store", help="The directory where the input data files are located. This directory MUST contain one directory per condition. Each condition directory must contain one directory per sample/subject. Each of those directories, in turn, must have a file named after the pattern ${sample}_${condition}_normalized.txt. [default: data/input]", default="data/input", required=False)
+	input_group.add_argument("-i", "-id", "--input-dir", dest="input_dir", metavar="/path/to/input/dir", type=str, action="store", help="The directory where the input data files are located. This directory MUST contain one directory per condition. Each condition directory must contain files named after the pattern ${sample}_${condition}_normalized.txt. [default: data/input]", default="data/input", required=False)
 	input_group.add_argument("-s", "-sf", "--samples-file", dest="samples_fn", metavar="samples.list", type=str, action="store", help="The name of the file containing sample/subject identifiers. One id per line. [default: data/samples.list]", default="data/samples.list", required=False)
 
 	output_group = parser.add_argument_group("Output Files")
@@ -264,7 +264,7 @@ if __name__ == "__main__":
 			for measurement in measurements:
 				output[measurement].extend( [ [] for x in range(0,num_trials,1) ] )
 
-			ifn = f"{infdir}/{condition}/{sample}/{sample}_{condition}_normalized.txt"
+			ifn = f"{infdir}/{condition}/{sample}_{condition}_normalized.txt"
 
 			with open(ifn, 'r') as ifd:
 				ifd.readline() # skip first line
