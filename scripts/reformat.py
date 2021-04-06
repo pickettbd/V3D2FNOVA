@@ -98,7 +98,7 @@ def handleArgs():
 		for cond in cond_l:
 			samplefn = Path(args.input_dir) / cond / "samples.list"
 			#	exists
-			if not samplefn.is_file()
+			if not samplefn.is_file():
 				print(f"ERROR: {samplefn} either does not exist or is not a regular file.", file=sys.stderr)
 				sys.exit(1)
 
@@ -282,6 +282,10 @@ if __name__ == "__main__":
 	
 	# handle the arguments to the script
 	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, downgrade, last_not_first, write_concatenation, dup_control, control_cond, per_cond_sample_files, treadmill, contralateral = handleArgs()
+
+	#	import pathlib, if needed, based on the arguments provided
+	if per_cond_sample_files:
+		from pathlib import Path,PurePath
 
 	# parse the samples file, save as list of samples
 	samples = [] if per_cond_sample_files else parseSamplesFile(samplefn)
