@@ -13,7 +13,7 @@ def handleArgs():
 
 	import argparse
 
-	parser = argparse.ArgumentParser(prog="reformat.py", usage="%(prog)s [-d demo.csv] [-s sample.list] [-i data/input] [-op data/output/] [-os .csv] [-c data/conditions.list] [-C control] [-n 5] [-glLNThv]", description="Prepare Visual 3D (V3D) data for FNOVA at UNC-CH", add_help=False)
+	parser = argparse.ArgumentParser(prog="reformat.py", usage="%(prog)s [-d demo.csv] [-s sample.list] [-i data/input] [-op data/output/] [-os .csv] [-c data/conditions.list] [-C control] [-n 5] [-DglLNPThv]", description="Prepare Visual 3D (V3D) data for FNOVA at UNC-CH", add_help=False)
 
 	input_group = parser.add_argument_group("Input Files")
 	input_group.add_argument("-d", "-df", "--demo-file", dest="demo_fn", metavar="demo.csv", type=str, action="store", help="The name of the CSV file containing demographics information. Column 1 must be the sample/subject id. Columns 4, 5, and 7 must be height (cm), mass (kg), and involved limb (0=Right, 1=Left), respectively. [default: data/demographics.csv]", default="data/demographics.csv", required=False)
@@ -25,61 +25,100 @@ def handleArgs():
 	output_group.add_argument("-os", "--output-suffix", dest="output_fn_sfx", metavar=".csv", type=str, action="store", help="The suffix of the output file name. This includes the leading period, if desired. The actual output file will have the the condition and measurements sandwiched between the prefix and this suffix, like so: ${prefix}${condition}_{measurement}${suffix}. [default: .csv", default=".csv", required=False)
 
 	options_group = parser.add_argument_group("Options")
-	#options_group.add_argument("-c", "--condition", dest="condition", metavar="cond1|cond2|...|condN", type=str, action="store", help="The experimental condition of the provided data, e.g., control, overload, etc. [default: control]", default="control", required=False)
 	options_group.add_argument("-c", "-cf", "--conditions-file", dest="conditions_fn", metavar="data/conditions.list", type=str, action="store", help="The file name for the experimental conditions of the provided data, e.g., control, overload, etc. One condition is listed per line. [default: data/conditions.list]", default="data/conditions.list", required=False)
 	options_group.add_argument("-C", "-cc", "-Cc", "-CC", "--control-condition", dest="control_condition", metavar="control", type=str, action="store", help="The condition that is to be treated as the control. [default: control]", default="control", required=False)
+	options_group.add_argument("-D", "-DC", "-dc", "-Dc", "--duplicate-control", dest="dup_control", action="store_true", help="By default, the control condition will NOT be duplicated at the end of the file during horizontal concatenation (assuming horizontal concatenation is performed (see the -N option)). When this option is specified, the control condition will be duplicated at the end, occuring as many times as there are non-control conditions. If your control condition is not 'control', you need to specify --control-condition.", required=False)
 	options_group.add_argument("-g", "-dg", "--downgrade", "--downhill", dest="downgrade", action="store_true", help="When the grade is zero (level ground) or positive (uphill), the LEFT knee values need to be negated. When the grade is negative (downhill), the RIGHT knee values need to be negated. By default, the grade is assumed to be non-negative.")
-	options_group.add_argument("-l", "--last", dest="last_not_first", action="store_true", help="By default, the first n trials are used. Instead, use the last n trials.")
-	options_group.add_argument("-L", "--contralateral", dest="contralateral", action="store_true", help="By default, the involved limb is the limb of interest. When this option is specified, the uninvolved/contralateral limb is used instead. Note: this is very naively implemented. When the involved limb is read in from the demographics file, the value is flipped (0->1, 1->0).")
+	options_group.add_argument("-l", "--last", dest="last_not_first", action="store_true", help="By default, the first n trials are used. Instead, use the last n trials.", required=False)
+	options_group.add_argument("-L", "--contralateral", dest="contralateral", action="store_true", help="By default, the involved limb is the limb of interest. When this option is specified, the uninvolved/contralateral limb is used instead. Note: this is very naively implemented. When the involved limb is read in from the demographics file, the value is flipped (0->1, 1->0).", required=False)
 	options_group.add_argument("-n", "-nt", "--num-trials", dest="num_trials", metavar="int", type=int, action="store", help="The number of trials (stances) to use. [default: 5]", default=5, required=False)
-	options_group.add_argument("-N", "-NC", "-nc", "-Nc", "--no-concatenate", dest="concatenate", action="store_false", help="By default, the output files for each condition are combined into an extra output file all horizontally concatenated together, with the control condition occuring as many time as there are non-control conditions. Specify this option and the concatenated files will be skipped. You need not specify --control-condition when using this option because it (--control-condition) will be ignored.")
+	options_group.add_argument("-N", "-NC", "-nc", "-Nc", "--no-concatenate", dest="concatenate", action="store_false", help="By default, the output files for each condition are combined into an extra output file all horizontally concatenated together, optionally (-D) with the control condition occuring as many time as there are non-control conditions. Specify this option and the concatenated files will be skipped. You need not specify --control-condition when using this option because it (--control-condition) will be ignored. Similarly, the use of --duplicate-control will be ignored if this option is specified.", required=False)
+	options_group.add_argument("-P", "-PC", "-pc", "-Pc", "--per-condition-samples-files", dest="per_cond_samples_files", action="store_true", help="By default, the samples file (--samples-file) is a single file that applies to all conditions. If some samples were not collected or were low-quality for a particular condition, that sample should be skipped for the given condition. Accordingly, individual samples files must be provided for each condition. Instead of a single samples file (e.g., at data/samples.list), separate sample files (presumabely, though not necessarily, with different samples listed in one or more) must be provided (e.g., at data/input/cond1/samples.list, data/input/cond2/samples.list, ..., data/input/condN/samples.list). Currently, if this option (-P) is used, the program requires the individual samples files to be called 'samples.list' and be located in the respective condition directories (one condition directory per condition located in data/input (or wherever -i points to)).", required=False)
 	options_group.add_argument("-T", "--not-treadmill", dest="treadmill", action="store_false", help="vGRF values are pulled from columns FP1 (right foot) and FP2 (left foot) when collected on a treadmill. If overground (i.e., not treadmill) data is collected, the columns are FP3 (right foot) and FP2 (left foot). Specifying this option will cause the program to search for FP3 columns instead of FP1 columns.")
 	
 	misc_group = parser.add_argument_group("Misc", )
 	misc_group.add_argument("-h", "--help", action="help", help="Show this help message and exit")
-	misc_group.add_argument("-v", "--version", action="version", version="%(prog)s 0.9.0-beta", help="Show version number and exit")
+	misc_group.add_argument("-v", "--version", action="version", version="%(prog)s 0.2.1-beta", help="Show version number and exit")
 
 	args = parser.parse_args()
+
+	# validate the arguments, as needed
+	from pathlib import Path,PurePath
 
 	# validate number of trials
 	if args.num_trials < 1:
 		sys.stderr.write(f"ERROR: It makes sense to analyze one ore more trials. {args.num_trials} is not a sane choice.\n")
 		sys.exit(1)
 	
-	# ensure input sample, demo, and conditions files exist
-	from pathlib import Path,PurePath
+	# ensure input directory exists
+	if not Path(args.input_dir).is_dir():
+		print(f"ERROR: {args.input_dir} either does not exist or is not a directory (or link to a directory).", file=sys.stderr)
+		sys.exit(1)
+
+	# ensure input demo exists
 	if not Path(args.demo_fn).is_file():
 		print(f"ERROR: {args.demo_fn} either does not exist or is not a regular file.", file=sys.stderr)
 		sys.exit(1)
 
-	if not Path(args.samples_fn).is_file():
-		print(f"ERROR: {args.samples_fn} either does not exist or is not a regular file.", file=sys.stderr)
-		sys.exit(1)
-
+	# ensure conditions file exists and has unique entries and
+	# one condition directory is present inside the input_dir for each condition
+	# and the control condition is in the conditions file
+	#	exists
 	if not Path(args.conditions_fn).is_file():
 		print(f"ERROR: {args.conditions_fn} either does not exist or is not a regular file.", file=sys.stderr)
 		sys.exit(1)
-	
-	# ensure input sample and conditions files have unique entries
-	l = parseListFileAsList(args.samples_fn)
-	if len(l) != len(set(l)):
-		print(f"ERROR: {args.samples_fn} has duplicate entries.", file=sys.stderr)
-		sys.exit(1)
 
-	l = parseListFileAsList(args.conditions_fn)
-	if len(l) != len(set(l)):
+	#	unique entries
+	cond_l = parseListFileAsList(args.conditions_fn)
+	if len(cond_l) != len(set(cond_l)):
 		print(f"ERROR: {args.conditions_fn} has duplicate entries.", file=sys.stderr)
 		sys.exit(1)
+	
+	#	dirs exist in input_dir
+	for cond in cond_l:
+		cond_path = Path(args.input_dir) / cond
+		if not cond_path.is_dir():
+			print(f"ERROR: {cond_path} either does not exist or is not a directory (or link to a directory).", file=sys.stderr)
+			sys.exit(1)
 
-	# ensure control condition is in the conditions file
-	if args.concatenate:
+	# 	control condition in conditions file (if required)
+	if args.concatenate and args.dup_control:
 		control_in_conditions_file = False
-		for condition in l:
+		for condition in cond_l:
 			if condition == args.control_condition:
 				control_in_conditions_file = True
 				break
 		if not control_in_conditions_file:
 			print(f"ERROR: control condition ({control}) was not in {args.condition_fn}.", file=sys.stderr)
+			sys.exit(1)
+	
+	# ensure input samples file(s) exist(s) and has(have) unique entries
+	#	multiple samples files
+	if args.per_cond_samples_files:
+		for cond in cond_l:
+			samplefn = Path(args.input_dir) / cond / "samples.list"
+			#	exists
+			if not samplefn.is_file()
+				print(f"ERROR: {samplefn} either does not exist or is not a regular file.", file=sys.stderr)
+				sys.exit(1)
+
+			#	unique entries
+			samples = parseSamplesFile(str(samplefn))
+			if len(samples) != len(set(samples)):
+				print(f"ERROR: {samplefn} has duplicate entries.", file=sys.stderr)
+				sys.exit(1)
+
+	#	single samples file
+	else:
+		#	exists
+		if not Path(args.samples_fn).is_file():
+			print(f"ERROR: {args.samples_fn} either does not exist or is not a regular file.", file=sys.stderr)
+			sys.exit(1)
+
+		#	unique entries
+		samples = parseListFileAsList(args.samples_fn)
+		if len(samples) != len(set(samples)):
+			print(f"ERROR: {args.samples_fn} has duplicate entries.", file=sys.stderr)
 			sys.exit(1)
 
 	# ensure output suffix directory exists
@@ -93,7 +132,7 @@ def handleArgs():
 		print(f"ERROR: {parent} either does not exist or is not a directory. The path was extracted from \"{args.output_fn_pfx}\".", file=sys.stderr)
 		sys.exit(1)
 	
-	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.downgrade, args.last_not_first, args.concatenate, args.control_condition, args.treadmill, args.contralateral
+	return args.samples_fn, args.demo_fn, args.conditions_fn, args.input_dir, args.output_fn_pfx, args.output_fn_sfx, args.num_trials, args.downgrade, args.last_not_first, args.concatenate, args.dup_control, args.control_condition, args.per_cond_samples_files, args.treadmill, args.contralateral
 
 def transpose2Dlist(rows):
 	# we assume this is not a sparse matrix
@@ -203,12 +242,13 @@ def extractIndicesAndInversionDecision(measurement,inv_limb,data_types,xyzs,down
 
 	return [i for i,data_type,xyz in zip(range(0,len(data_types),1),data_types,xyzs) if data_type == field and xyz == direction], invert
 
-def writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, control_cond):
+def writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, control_cond, dup_control):
 
 	non_control_conditions = 0
-	for condition in conditions:
-		if condition != control_cond:
-			non_control_conditions += 1
+	if dup_control: # this if could be moved to the two times we extend the lines list instead if we wanted to use non_control_conditions for any other purpose
+		for condition in conditions:
+			if condition != control_cond:
+				non_control_conditions += 1
 
 	for measurement in measurements:
 		all_input_filenames = [ f"{outfnpre}{condition}_{measurement}{outfnsuf}" for condition in conditions ]
@@ -241,16 +281,16 @@ def stringify(x):
 if __name__ == "__main__":
 	
 	# handle the arguments to the script
-	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, downgrade, last_not_first, write_concatenation, control_cond, treadmill, contralateral = handleArgs()
+	samplefn, demfn, condfn, infdir, outfnpre, outfnsuf, num_trials, downgrade, last_not_first, write_concatenation, dup_control, control_cond, per_cond_sample_files, treadmill, contralateral = handleArgs()
 
 	# parse the samples file, save as list of samples
-	samples = parseSamplesFile(samplefn)
+	samples = [] if per_cond_sample_files else parseSamplesFile(samplefn)
 
 	# parse the demographics file, save in nested dictionary structure
 	demdict = parseDemographicsFile(demfn, contralateral=contralateral)
 
 	# parse the conditions file, save as list of conditions
-	conditions = parseConditionsFile(condfn, control_cond, force_control_last=write_concatenation)
+	conditions = parseConditionsFile(condfn, control_cond, force_control_last=(write_concatenation and dup_control) )
 
 	# loop through input files
 	measurements = [ "vgrf", "sagang", "frontang", "sagmom", "frontmom" ]
@@ -259,6 +299,11 @@ if __name__ == "__main__":
 		output = {}
 		for measurement in measurements:
 			output[measurement] = []
+
+		
+		if per_cond_sample_files:
+			samplefn = Path(infdir) / condition / "samples.list"
+			samples = parseSamplesFile(str(samplefn))
 
 		for sample in samples:
 			for measurement in measurements:
@@ -353,7 +398,7 @@ if __name__ == "__main__":
 					ofd.write(','.join(list(map(stringify, row))) + '\n')
 	
 	if write_concatenation:
-		writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, control_cond)
+		writeConcatenatedOutput(outfnpre, outfnsuf, measurements, conditions, control_cond, dup_control)
 		
 	# exit
 	sys.exit(0)
